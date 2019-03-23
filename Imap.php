@@ -1,7 +1,7 @@
 <?php
 namespace Imap;
 /** This class can do certain imap commands, including custom commands, search etc.
- * Class imap_driver
+ * Class Imap
  */
 class Imap
 {
