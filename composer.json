@@ -7,7 +7,9 @@
             "email": "phydokz@gmail.com"
         }
     ],
-    "psr-4": {
-        "Imap\\": "src"
+    "autoload": {
+        "classmap":[
+            "src/Imap"
+        ]
     }
 }
