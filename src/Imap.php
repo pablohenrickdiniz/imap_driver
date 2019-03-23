@@ -5,31 +5,20 @@ namespace Imap;
  */
 class Imap
 {
-    private $commandCounter = "00000001";
+    private $counter = 1;
     private $fp;
-    public $error;
-
-    public $lastResponse = array();
-    public $lastEndline = "";
-    private $fullDebug = false;
+    private $lastError = null;
 
     public function init($host, $port)
     {
-        if (!($this->fp = fsockopen($host, $port, $errno, $errstr, 15))) {
-            $this->error = "Could not connect to host ($errno) $errstr";
-
+        if (!($this->fp = @fsockopen($host, $port, $errno, $errstr, 15))) {
+            $this->lastError = $errstr;
             return false;
         }
 
-        if (!stream_set_timeout($this->fp, 15)) {
+        if (!@stream_set_timeout($this->fp, 15)) {
             $this->error = "Could not set timeout";
-
             return false;
-        }
-
-        $line = fgets($this->fp);
-        if ($this->fullDebug) {
-            echo $line;
         }
 
         return true;
@@ -37,125 +26,90 @@ class Imap
 
     public function login($login, $pwd)
     {
-        $this->command("LOGIN $login $pwd");
-
-        if (preg_match('~^OK~', $this->lastEndline)) {
-
-            return true;
-        } else {
-            $this->error = join(', ', $this->lastResponse);
-            $this->close();
-
-            return false;
-        }
+        return $this->command("LOGIN $login $pwd")['success'];
     }
 
     public function selectFolder($folder)
     {
-        $this->command("SELECT $folder");
-
-        if (preg_match('~^OK~', $this->lastEndline)) {
-            return true;
-        } else {
-            $this->error = join(', ', $this->lastResponse);
-            $this->close();
-
-            return false;
-        }
+        return $this->command("SELECT $folder")['success'];
     }
 
     public function search($criteria)
     {
-        $this->command("SEARCH $criteria");
-        if (preg_match('~^OK~', $this->lastEndline) && is_array($this->lastResponse) && count($this->lastResponse) == 1) {
-            $splitted_response = explode(' ', $this->lastResponse[0]);
-            $uids              = array();
-
-            foreach ($splitted_response as $item) {
-                if (preg_match('~^\d+$~', $item)) {
-                    $uids[] = $item;
-                }
+        $ids = [];
+        $response = $this->command("SEARCH $criteria");
+        if($response['success']){
+            if(isset($response['output'][0])){
+                if(preg_match_all("/\d+/",$response['output'][0],$matches))
+                    $ids = $matches[0];
             }
-
-            return $uids;
-        } else {
-            $this->error = join(', ', $this->lastResponse);
-            $this->close();
-
-            return false;
+            return $ids;
         }
+        return $ids;
     }
 
-    public function getHeadersFromUid($uid)
-    {
-        $this->command("FETCH $uid BODY.PEEK[HEADER]");
-
-        if (preg_match('~^OK~', $this->lastEndline)) {
-            array_shift($this->lastResponse); // skip first line
-
-            $headers    = array();
-            $prev_match = '';
-            foreach ($this->lastResponse as $item) {
-                if (preg_match('~^([a-z][a-z0-9-_]+):~is', $item, $match)) {
-                    $header_name           = strtolower($match[1]);
-                    $prev_match            = $header_name;
-                    $headers[$header_name] = trim(substr($item, strlen($header_name) + 1));
-                } else {
-                    $headers[$prev_match] .= " " . $item;
-                }
+    private function fetch($uid,$section){
+        $response = $this->command("FETCH $uid BODY.PEEK[$section]");
+        if($response['success']){
+            $output = implode("",$response['output']);
+            if(preg_match("/^\*\s+$uid+\s+FETCH\s+\(BODY\[$section\]\s+\{[0-9]+\}\s*((.*\s*)*)\)/",$output,$matches)){
+                return $matches[1];
             }
-
-            return $headers;
-        } else {
-            $this->error = join(', ', $this->lastResponse);
-            $this->close();
-
-            return false;
         }
+        return false;
+    }
+
+    public function fetchText($uid){
+        return $this->fetch($uid,'TEXT');
+    }
+
+    public function fetchHeaders($uid)
+    {
+        return $this->fetch($uid,'HEADER');
     }
 
     private function command($command)
     {
-        $this->lastResponse = array();
-        $this->lastEndline  = "";
-
-        if ($this->fullDebug) {
-            echo "$this->commandCounter $command\r\n";
-        }
-
-        fwrite($this->fp, "$this->commandCounter $command\r\n");
-
-        while ($line = fgets($this->fp)) {
-            $line = trim($line); // do not combine with the line above in while loop, because sometimes valid response maybe \n
-
-            if ($this->fullDebug) {
-                echo "Line: [$line]\n";
-            }
-
-            $line_arr = preg_split('/\s+/', $line, 0, PREG_SPLIT_NO_EMPTY);
-            if (count($line_arr) > 0) {
-                $code = array_shift($line_arr);
-                if (strtoupper($code) == $this->commandCounter) {
-                    $this->lastEndline = join(' ', $line_arr);
+        $response = [
+            'output' => [],
+            'success' => false
+        ];
+        $counter = $this->count();
+        if(@fwrite($this->fp, "$counter $command\r\n")){
+            $lines = [];
+            while ($line = @fgets($this->fp)) {
+                if(preg_match("/^$counter\s+(OK|NO|BAD)(.*?)$/i",$line,$matches)){
+                    $status = strtoupper($matches[1]);
+                    if(in_array($status,['NO','BAD'])){
+                        $response['success'] = false;
+                        $response['error'] = $matches[2];
+                        $this->lastError = $matches[2];
+                        $this->close();
+                    }
+                    else{
+                        $response['success'] = true;
+                    }
                     break;
-                } else {
-                    $this->lastResponse[] = $line;
                 }
-            } else {
-                $this->lastResponse[] = $line;
+                $lines[] = $line;
             }
+            $response['output'] = array_filter($lines);
         }
 
-        $this->incrementCounter();
+        return $response;
     }
 
-    private function incrementCounter()
+    private function count()
     {
-        $this->commandCounter = sprintf('%08d', intval($this->commandCounter) + 1);
+        return sprintf('%08d', $this->counter++);
     }
 
     public function close()
     {
-        fclose($this->fp);
+        @fclose($this->fp);
+    }
+
+    public function getLastError(){
+        return $this->lastError;
     }
 }
