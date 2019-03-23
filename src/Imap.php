@@ -64,7 +64,7 @@ class Imap
         }
     }
 
-    public function getUidsBySearch($criteria)
+    public function search($criteria)
     {
         $this->command("SEARCH $criteria");
         if (preg_match('~^OK~', $this->lastEndline) && is_array($this->lastResponse) && count($this->lastResponse) == 1) {
@@ -96,7 +96,6 @@ class Imap
             $headers    = array();
             $prev_match = '';
             foreach ($this->lastResponse as $item) {
-
                 if (preg_match('~^([a-z][a-z0-9-_]+):~is', $item, $match)) {
                     $header_name           = strtolower($match[1]);
                     $prev_match            = $header_name;
