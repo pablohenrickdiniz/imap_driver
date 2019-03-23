@@ -6,5 +6,8 @@
             "name": "Pablo Henrick Diniz",
             "email": "phydokz@gmail.com"
         }
-    ]
+    ],
+    "psr-4": {
+        "App\\": "src"
+    }
 }
