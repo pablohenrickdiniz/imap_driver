@@ -1,19 +1,17 @@
 <?php
-
+namespace Imap;
 /** This class can do certain imap commands, including custom commands, search etc.
  * Class imap_driver
  */
-class imap_driver
+class Imap
 {
-    private $command_counter = "00000001";
-
+    private $commandCounter = "00000001";
     private $fp;
     public $error;
 
-    public $last_response = array();
-    public $last_endline = "";
-
-    private $full_debug = false;
+    public $lastResponse = array();
+    public $lastEndline = "";
+    private $fullDebug = false;
 
     public function init($host, $port)
     {
@@ -30,49 +28,47 @@ class imap_driver
         }
 
         $line = fgets($this->fp);
-        if ($this->full_debug) {
+        if ($this->fullDebug) {
             echo $line;
         }
 
         return true;
     }
 
-
     public function login($login, $pwd)
     {
         $this->command("LOGIN $login $pwd");
 
-        if (preg_match('~^OK~', $this->last_endline)) {
+        if (preg_match('~^OK~', $this->lastEndline)) {
 
             return true;
         } else {
-            $this->error = join(', ', $this->last_response);
+            $this->error = join(', ', $this->lastResponse);
             $this->close();
 
             return false;
         }
     }
 
-    public function select_folder($folder)
+    public function selectFolder($folder)
     {
         $this->command("SELECT $folder");
 
-        if (preg_match('~^OK~', $this->last_endline)) {
+        if (preg_match('~^OK~', $this->lastEndline)) {
             return true;
         } else {
-            $this->error = join(', ', $this->last_response);
+            $this->error = join(', ', $this->lastResponse);
             $this->close();
 
             return false;
         }
     }
 
-    public function get_uids_by_search($criteria)
+    public function getUidsBySearch($criteria)
     {
         $this->command("SEARCH $criteria");
-
-        if (preg_match('~^OK~', $this->last_endline) && is_array($this->last_response) && count($this->last_response) == 1) {
-            $splitted_response = explode(' ', $this->last_response[0]);
+        if (preg_match('~^OK~', $this->lastEndline) && is_array($this->lastResponse) && count($this->lastResponse) == 1) {
+            $splitted_response = explode(' ', $this->lastResponse[0]);
             $uids              = array();
 
             foreach ($splitted_response as $item) {
@@ -83,23 +79,23 @@ class imap_driver
 
             return $uids;
         } else {
-            $this->error = join(', ', $this->last_response);
+            $this->error = join(', ', $this->lastResponse);
             $this->close();
 
             return false;
         }
     }
 
-    public function get_headers_from_uid($uid)
+    public function getHeadersFromUid($uid)
     {
         $this->command("FETCH $uid BODY.PEEK[HEADER]");
 
-        if (preg_match('~^OK~', $this->last_endline)) {
-            array_shift($this->last_response); // skip first line
+        if (preg_match('~^OK~', $this->lastEndline)) {
+            array_shift($this->lastResponse); // skip first line
 
             $headers    = array();
             $prev_match = '';
-            foreach ($this->last_response as $item) {
+            foreach ($this->lastResponse as $item) {
 
                 if (preg_match('~^([a-z][a-z0-9-_]+):~is', $item, $match)) {
                     $header_name           = strtolower($match[1]);
@@ -112,7 +108,7 @@ class imap_driver
 
             return $headers;
         } else {
-            $this->error = join(', ', $this->last_response);
+            $this->error = join(', ', $this->lastResponse);
             $this->close();
 
             return false;
@@ -121,42 +117,42 @@ class imap_driver
 
     private function command($command)
     {
-        $this->last_response = array();
-        $this->last_endline  = "";
+        $this->lastResponse = array();
+        $this->lastEndline  = "";
 
-        if ($this->full_debug) {
-            echo "$this->command_counter $command\r\n";
+        if ($this->fullDebug) {
+            echo "$this->commandCounter $command\r\n";
         }
 
-        fwrite($this->fp, "$this->command_counter $command\r\n");
+        fwrite($this->fp, "$this->commandCounter $command\r\n");
 
         while ($line = fgets($this->fp)) {
             $line = trim($line); // do not combine with the line above in while loop, because sometimes valid response maybe \n
 
-            if ($this->full_debug) {
+            if ($this->fullDebug) {
                 echo "Line: [$line]\n";
             }
 
             $line_arr = preg_split('/\s+/', $line, 0, PREG_SPLIT_NO_EMPTY);
             if (count($line_arr) > 0) {
                 $code = array_shift($line_arr);
-                if (strtoupper($code) == $this->command_counter) {
-                    $this->last_endline = join(' ', $line_arr);
+                if (strtoupper($code) == $this->commandCounter) {
+                    $this->lastEndline = join(' ', $line_arr);
                     break;
                 } else {
-                    $this->last_response[] = $line;
+                    $this->lastResponse[] = $line;
                 }
             } else {
-                $this->last_response[] = $line;
+                $this->lastResponse[] = $line;
             }
         }
 
-        $this->increment_counter();
+        $this->incrementCounter();
     }
 
-    private function increment_counter()
+    private function incrementCounter()
     {
-        $this->command_counter = sprintf('%08d', intval($this->command_counter) + 1);
+        $this->commandCounter = sprintf('%08d', intval($this->commandCounter) + 1);
     }
 
     public function close()

@@ -1,0 +1,10 @@
+{
+    "name": "pablohenrickdiniz/imap",
+    "type": "library",
+    "authors": [
+        {
+            "name": "Pablo Henrick Diniz",
+            "email": "phydokz@gmail.com"
+        }
+    ]
+}
