@@ -51,9 +51,17 @@ class Imap
     private function fetch($uid,$section){
         $response = $this->command("FETCH $uid BODY.PEEK[$section]");
         if($response['success']){
-            $output = implode("",$response['output']);
-            if(preg_match("/^\*\s+$uid+\s+FETCH\s+\(BODY\[$section\]\s+\{[0-9]+\}\s*((.*\s*)*)\)/",$output,$matches)){
-                return $matches[1];
+            $output = $response['output'];
+            $last = count($output)-1;
+            if(
+                isset($output[0]) &&
+                isset($output[$last]) &&
+                preg_match("/^\*\s+$uid\s+FETCH\s+\(BODY\[$section\]\s+\{[0-9]+\}\s*$/",$output[0]) &&
+                preg_match("/^\s*\)\s*$/",$output[$last])
+            ){
+                unset($output[0]);
+                unset($output[$last]);
+                return implode("",$output);
             }
         }
         return false;
