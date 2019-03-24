@@ -11,5 +11,8 @@
         "classmap":[
             "src"
         ]
+    },
+    "require": {
+        "ext-mbstring": "@stable"
     }
 }

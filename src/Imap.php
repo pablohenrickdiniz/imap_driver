@@ -52,16 +52,14 @@ class Imap
         $response = $this->command("FETCH $uid BODY.PEEK[$section]");
         if($response['success']){
             $output = $response['output'];
-            $last = count($output)-1;
-            if(
-                isset($output[0]) &&
-                isset($output[$last]) &&
-                preg_match("/^\*\s+$uid\s+FETCH\s+\(BODY\[$section\]\s+\{[0-9]+\}\s*$/",$output[0]) &&
-                preg_match("/^\s*\)\s*$/",$output[$last])
-            ){
+            if(isset($output[0]) && preg_match("/^\*\s+$uid\s+FETCH\s+\(BODY\[$section\]\s+\{[0-9]+\}\s*$/",$output[0])){
                 unset($output[0]);
-                unset($output[$last]);
-                return implode("",$output);
+                $output = implode("",$output);
+                $index = mb_strrpos($output,')');
+                if($index !== false){
+                    $output = substr($output,0,$index);
+                }
+                return $output;
             }
         }
         return false;
