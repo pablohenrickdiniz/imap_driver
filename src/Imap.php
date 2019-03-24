@@ -58,8 +58,8 @@ class Imap
                 $index = mb_strrpos($output,')');
                 if($index !== false){
                     $output = substr($output,0,$index);
+                    return $output;
                 }
-                return $output;
             }
         }
         return false;
